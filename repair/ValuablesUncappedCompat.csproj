@@ -8,8 +8,10 @@
     <AssemblyName>EmpressValuablesUncapped</AssemblyName>
     <RootNamespace>Empress.ValuablesUncapped</RootNamespace>
     <Optimize>true</Optimize>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="ValuablesUncappedCompat.cs" />
     <GameReference Include="$(BepInExDir)/**/*.dll" />
     <Reference Include="@(GameReference->'%(Filename)')">
       <HintPath>%(GameReference.FullPath)</HintPath>
