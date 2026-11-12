@@ -15,5 +15,9 @@
       <HintPath>%(GameReference.FullPath)</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(UnityEngineStubPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 </Project>
