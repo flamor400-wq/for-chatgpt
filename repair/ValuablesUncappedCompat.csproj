@@ -20,7 +20,7 @@
       <HintPath>$(BepInExDir)/core/0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.CoreModule">
+    <Reference Include="UnityEngine">
       <HintPath>$(UnityEngineStubPath)</HintPath>
       <Private>false</Private>
     </Reference>
