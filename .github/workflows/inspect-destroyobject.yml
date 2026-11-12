@@ -1,0 +1,41 @@
+name: Inspect PhysGrabObjectImpactDetector
+
+on:
+  push:
+    branches:
+      - inspect-destroyobject-051
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Install ILSpy
+        run: |
+          dotnet tool install --global ilspycmd
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: Decompile actual REPO 0.5.1 methods
+        run: |
+          mkdir -p diagnostics
+          ilspycmd -t PhysGrabObjectImpactDetector Assembly-CSharp.dll > diagnostics/PhysGrabObjectImpactDetector.cs
+          grep -n -A18 -B8 'DestroyObject' diagnostics/PhysGrabObjectImpactDetector.cs > diagnostics/DestroyObject-excerpt.txt || true
+          sha256sum Assembly-CSharp.dll > diagnostics/assembly-hash.txt
+      - name: Download REPO Compatibility Patch 1.1.2
+        run: |
+          curl -fL "https://thunderstore.io/package/download/DEADTROL/REPO_Compatibility_Patch/1.1.2/" -o compat.zip
+          mkdir -p compat
+          unzip -l compat.zip > diagnostics/compat-package-files.txt
+          unzip -q compat.zip -d compat
+          find compat -type f -maxdepth 7 -print > diagnostics/compat-installed-paths.txt
+      - name: Upload inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: destroyobject-inspection
+          path: diagnostics/
+          retention-days: 2
