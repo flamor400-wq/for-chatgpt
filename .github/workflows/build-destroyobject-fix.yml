@@ -1,0 +1,29 @@
+name: Build REPO DestroyObject Callsite Fix
+
+on:
+  push:
+    branches:
+      - fix/destroyobject-callsite
+    paths:
+      - "src/DestroyObjectCallsiteFix/**"
+      - ".github/workflows/build-destroyobject-fix.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore src/DestroyObjectCallsiteFix/REPOCompatibilityPatcher.DestroyObjectCallsiteFix.csproj
+      - name: Build
+        run: dotnet build src/DestroyObjectCallsiteFix/REPOCompatibilityPatcher.DestroyObjectCallsiteFix.csproj --configuration Release --no-restore
+      - name: Upload patched mod DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: REPOCompatibilityPatcher-DestroyObjectCallsiteFix
+          path: src/DestroyObjectCallsiteFix/bin/Release/netstandard2.1/REPOCompatibilityPatcher.DestroyObjectCallsiteFix.dll
+          if-no-files-found: error
