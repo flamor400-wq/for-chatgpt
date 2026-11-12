@@ -25,18 +25,15 @@ jobs:
           dotnet tool install --global ilspycmd
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      - name: Decompile valuable director and related types
+      - name: Decompile REPO 0.5.1 valuable director
         shell: bash
         run: |
           mkdir -p diagnostics
           ilspycmd -l c Assembly-CSharp.dll | tee diagnostics/types.txt
           grep -i 'valuable' diagnostics/types.txt > diagnostics/valuable-types.txt || true
           ilspycmd -t ValuableDirector Assembly-CSharp.dll > diagnostics/ValuableDirector.cs
-          for type in ValuableVolume ValuableDirector ValuableDirectorData; do
-            if grep -qE "[[:space:]]$type$" diagnostics/types.txt; then
-              ilspycmd -t "$type" Assembly-CSharp.dll > "diagnostics/$type.cs" || true
-            fi
-          done
+          ilspycmd -t 'ValuableDirector.<SetupHost>d__90' Assembly-CSharp.dll > diagnostics/SetupHostStateMachine.cs || true
+          ilspycmd -t ValuableVolume Assembly-CSharp.dll > diagnostics/ValuableVolume.cs
           {
             echo "Repository: $GITHUB_REPOSITORY"
             echo "Commit: $GITHUB_SHA"
@@ -44,6 +41,29 @@ jobs:
             sha256sum Assembly-CSharp.dll
             stat -c 'Size: %s bytes' Assembly-CSharp.dll
           } > diagnostics/build-info.txt
+
+      - name: Inspect latest official Valuables Uncapped package
+        shell: bash
+        run: |
+          mkdir -p modpkg diagnostics/latest-mod
+          curl -fL "https://thunderstore.io/package/download/Omniscye/Valuables_Uncapped/2.1.0/" -o modpkg/latest.zip
+          unzip -q modpkg/latest.zip -d modpkg/unpacked
+          find modpkg/unpacked -type f -name '*.dll' -print
+          DLL="$(find modpkg/unpacked -type f -name '*.dll' | head -n 1)"
+          test -n "$DLL"
+          ilspycmd -l c "$DLL" | tee diagnostics/latest-mod/types.txt
+          while IFS= read -r line; do
+            case "$line" in
+              *ValuableDirectorSpawnValuablePatch*|*ValuableDirectorSetupHostPatch*)
+                TYPE="${line#Class }"
+                SAFE="$(echo "$TYPE" | tr -c 'A-Za-z0-9._-' '_')"
+                ilspycmd -t "$TYPE" "$DLL" > "diagnostics/latest-mod/$SAFE.cs" || true
+                ;;
+            esac
+          done < diagnostics/latest-mod/types.txt
+          cp "$DLL" diagnostics/latest-mod/
+          unzip -p modpkg/latest.zip manifest.json > diagnostics/latest-mod/manifest.json || true
+          unzip -p modpkg/latest.zip README.md > diagnostics/latest-mod/README.md || true
 
       - name: Upload diagnostics
         uses: actions/upload-artifact@v4
