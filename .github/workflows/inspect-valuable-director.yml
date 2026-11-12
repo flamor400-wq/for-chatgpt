@@ -1,0 +1,53 @@
+name: Inspect REPO valuable director
+
+on:
+  push:
+    branches:
+      - gpt-inspect-valuable-director
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install ILSpy command line
+        run: |
+          dotnet tool install --global ilspycmd
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Decompile valuable director and related types
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          ilspycmd -l c Assembly-CSharp.dll | tee diagnostics/types.txt
+          grep -i 'valuable' diagnostics/types.txt > diagnostics/valuable-types.txt || true
+          ilspycmd -t ValuableDirector Assembly-CSharp.dll > diagnostics/ValuableDirector.cs
+          for type in ValuableVolume ValuableDirector ValuableDirectorData; do
+            if grep -qE "[[:space:]]$type$" diagnostics/types.txt; then
+              ilspycmd -t "$type" Assembly-CSharp.dll > "diagnostics/$type.cs" || true
+            fi
+          done
+          {
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Commit: $GITHUB_SHA"
+            echo "Assembly: Assembly-CSharp.dll"
+            sha256sum Assembly-CSharp.dll
+            stat -c 'Size: %s bytes' Assembly-CSharp.dll
+          } > diagnostics/build-info.txt
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: valuable-director-inspection
+          path: diagnostics/
+          retention-days: 2
