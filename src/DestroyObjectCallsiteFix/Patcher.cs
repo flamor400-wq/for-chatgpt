@@ -143,6 +143,10 @@ public static class Patcher
 
             foreach (ModuleDefinition module in assembly.Modules)
             {
+                // A MemberRef can be shared by call sites in different methods in the same module.
+                // Keep this set at module scope so every use gets its matching extra stack argument.
+                var upgradedReferences = new HashSet<MethodReference>();
+
                 foreach (TypeDefinition type in AllTypes(module.Types))
                 {
                     foreach (MethodDefinition method in type.Methods)
@@ -151,7 +155,6 @@ public static class Patcher
                             continue;
 
                         IList<Instruction> instructions = method.Body.Instructions;
-                        var upgradedReferences = new HashSet<MethodReference>();
 
                         for (int i = 0; i < instructions.Count; i++)
                         {
@@ -177,7 +180,38 @@ public static class Patcher
                             // Old call stack: instance, effects.
                             // New call stack: instance, effects, false.
                             // false matches the default used by the existing compatibility shim.
-                            instructions.Insert(i, Instruction.Create(OpCodes.Ldc_I4_0));
+                            Instruction loadDefault = Instruction.Create(OpCodes.Ldc_I4_0);
+                            Instruction callInstruction = instruction;
+                            instructions.Insert(i, loadDefault);
+
+                            // A branch or switch may target the call directly. Redirect those targets
+                            // so none can jump over the newly inserted default argument.
+                            foreach (Instruction candidate in instructions)
+                            {
+                                if (ReferenceEquals(candidate.Operand, callInstruction))
+                                    candidate.Operand = loadDefault;
+                                else
+                                {
+                                    Instruction[] targets = candidate.Operand as Instruction[];
+                                    if (targets != null)
+                                    {
+                                        for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
+                                        {
+                                            if (ReferenceEquals(targets[targetIndex], callInstruction))
+                                                targets[targetIndex] = loadDefault;
+                                        }
+                                    }
+                                }
+                            }
+
+                            foreach (ExceptionHandler handler in method.Body.ExceptionHandlers)
+                            {
+                                if (ReferenceEquals(handler.TryStart, callInstruction)) handler.TryStart = loadDefault;
+                                if (ReferenceEquals(handler.HandlerStart, callInstruction)) handler.HandlerStart = loadDefault;
+                                if (ReferenceEquals(handler.FilterStart, callInstruction)) handler.FilterStart = loadDefault;
+                            }
+
+                            method.Body.MaxStackSize = Math.Max(method.Body.MaxStackSize, 1) + 1;
                             i++;
                             patchedCalls++;
                         }
