@@ -15,7 +15,7 @@ public static class Patcher
     // from this patcher; the game assembly is supplied to Patch() as Cecil metadata.
     public static IEnumerable<string> TargetDLLs
     {
-        get { return new[] { "Assembly-CSharp.dll" }; }
+        get { return new[] { "UnityEngine.CoreModule.dll" }; }
     }
 
     public static void Patch(AssemblyDefinition gameAssembly)
@@ -23,25 +23,23 @@ public static class Patcher
         try
         {
             if (gameAssembly == null || gameAssembly.MainModule == null ||
-                !string.Equals(gameAssembly.Name.Name, "Assembly-CSharp", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(gameAssembly.Name.Name, "UnityEngine.CoreModule", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            TypeDefinition targetType = FindType(gameAssembly.MainModule.Types, TargetTypeName);
-            MethodDefinition targetMethod = targetType == null
-                ? null
-                : targetType.Methods.FirstOrDefault(IsCurrentTwoBoolOverload);
-
-            if (targetMethod == null)
-            {
-                Log("Skipped: current Assembly-CSharp does not expose void " +
-                    TargetTypeName + "." + TargetMethodName + "(bool, bool).");
-                return;
-            }
-
+            // Assembly-CSharp may already have been loaded by Chainloader in some REPO setups.
+            // Do not target it as a preloader patch target. Read its on-disk metadata only.
             string gameRoot = FindGameRoot();
             if (gameRoot == null)
             {
                 Log("Skipped: could not locate BepInEx/plugins or BepInEx/patchers.");
+                return;
+            }
+
+            string gameAssemblyPath = FindGameAssembly(gameRoot);
+            if (gameAssemblyPath == null || !HasCurrentTargetApi(gameAssemblyPath))
+            {
+                Log("Skipped: could not verify void " + TargetTypeName +
+                    "." + TargetMethodName + "(bool, bool) in the current game's Assembly-CSharp.dll.");
                 return;
             }
 
@@ -107,6 +105,36 @@ public static class Patcher
         catch (Exception ex)
         {
             Log("Patcher failed safely: " + ex);
+        }
+    }
+
+    private static string FindGameAssembly(string gameRoot)
+    {
+        string[] candidates =
+        {
+            Path.Combine(gameRoot, "REPO_Data", "Managed", "Assembly-CSharp.dll"),
+            Path.Combine(gameRoot, "Assembly-CSharp.dll")
+        };
+
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static bool HasCurrentTargetApi(string assemblyPath)
+    {
+        try
+        {
+            using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(
+                assemblyPath,
+                new ReaderParameters { InMemory = true, ReadSymbols = false, ReadingMode = ReadingMode.Immediate }))
+            {
+                TypeDefinition type = FindType(assembly.MainModule.Types, TargetTypeName);
+                return type != null && type.Methods.Any(IsCurrentTwoBoolOverload);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Could not inspect Assembly-CSharp.dll: " + ex.Message);
+            return false;
         }
     }
 
