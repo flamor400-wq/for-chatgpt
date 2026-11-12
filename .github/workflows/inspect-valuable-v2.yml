@@ -1,0 +1,53 @@
+name: Inspect REPO valuable compatibility
+
+on:
+  push:
+    branches:
+      - gpt-inspect-valuable-v2
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Install ILSpy command line
+        run: |
+          dotnet tool install --global ilspycmd
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: Decompile REPO 0.5.1 valuable director
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          ilspycmd -t ValuableDirector Assembly-CSharp.dll > diagnostics/ValuableDirector.cs
+          ilspycmd -t 'ValuableDirector.<SetupHost>d__90' Assembly-CSharp.dll > diagnostics/SetupHostStateMachine.cs
+          ilspycmd -t ValuableVolume Assembly-CSharp.dll > diagnostics/ValuableVolume.cs
+          sha256sum Assembly-CSharp.dll > diagnostics/build-info.txt
+      - name: Decompile current official mod
+        shell: bash
+        run: |
+          mkdir -p modpkg/unpacked diagnostics/latest-mod
+          curl -fL "https://thunderstore.io/package/download/Omniscye/Valuables_Uncapped/2.1.0/" -o modpkg/latest.zip
+          unzip -q modpkg/latest.zip -d modpkg/unpacked
+          DLL="$(find modpkg/unpacked -type f -name '*.dll' | head -n 1)"
+          test -n "$DLL"
+          cp "$DLL" diagnostics/latest-mod/
+          ilspycmd -l c "$DLL" | tee diagnostics/latest-mod/types.txt
+          for TYPE in Empress.ValuablesUncapped.ValuableDirectorSpawnValuablePatch Empress.ValuablesUncapped.ValuableDirectorSetupHostPatch; do
+            ilspycmd -t "$TYPE" "$DLL" > "diagnostics/latest-mod/$(basename "$TYPE").cs" || true
+          done
+          unzip -p modpkg/latest.zip manifest.json > diagnostics/latest-mod/manifest.json || true
+          unzip -p modpkg/latest.zip README.md > diagnostics/latest-mod/README.md || true
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: valuable-compatibility-analysis
+          path: diagnostics/
+          retention-days: 2
