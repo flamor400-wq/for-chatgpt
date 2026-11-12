@@ -145,7 +145,7 @@ public static class Patcher
             {
                 // A MemberRef can be shared by call sites in different methods in the same module.
                 // Keep this set at module scope so every use gets its matching extra stack argument.
-                var upgradedReferences = new HashSet<MethodReference>();
+                var upgradedReferences = new List<MethodReference>();
 
                 foreach (TypeDefinition type in AllTypes(module.Types))
                 {
@@ -166,7 +166,7 @@ public static class Patcher
                             if (reference == null)
                                 continue;
 
-                            bool alreadyUpgraded = upgradedReferences.Contains(reference);
+                            bool alreadyUpgraded = upgradedReferences.Any(existing => ReferenceEquals(existing, reference));
                             if (!alreadyUpgraded)
                             {
                                 if (!IsLegacyDestroyObjectReference(reference))
