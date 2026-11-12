@@ -12,9 +12,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ValuablesUncappedCompat.cs" />
-    <GameReference Include="$(BepInExDir)/**/*.dll" />
-    <Reference Include="@(GameReference->'%(Filename)')">
-      <HintPath>%(GameReference.FullPath)</HintPath>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExDir)/core/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExDir)/core/0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
