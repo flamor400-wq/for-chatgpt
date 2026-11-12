@@ -1,0 +1,47 @@
+name: Build REPO 0.5.1 Valuables Uncapped compatibility (explicit references)
+
+on:
+  push:
+    branches:
+      - repair-valuable-051-build4
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Prepare BepInEx and Unity compile references
+        shell: bash
+        run: |
+          curl -fL "https://thunderstore.io/package/download/BepInEx/BepInExPack/5.4.2305/" -o bepInExPack.zip
+          mkdir -p deps
+          unzip -q bepInExPack.zip -d deps
+          BEX="$(find "$GITHUB_WORKSPACE/deps" -type f -name BepInEx.dll | head -n 1)"
+          test -n "$BEX"
+          echo "BepInExDir=$(dirname "$(dirname "$BEX")")" >> "$GITHUB_ENV"
+          dotnet build repair/UnityEngineStub.csproj --configuration Release --output deps/unity-stub
+          echo "UnityEngineStubPath=$GITHUB_WORKSPACE/deps/unity-stub/UnityEngine.CoreModule.dll" >> "$GITHUB_ENV"
+      - name: Build plugin
+        run: dotnet build repair/ValuablesUncappedCompat.csproj --configuration Release --output publish
+      - name: Inspect built plugin
+        shell: bash
+        run: |
+          dotnet tool install --global ilspycmd
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+          ilspycmd publish/EmpressValuablesUncapped.dll > publish/decompiled-check.cs
+          grep -E 'SpawnValuable|SetupHost|valuableDebug|totalMaxValue|0.5.1.1' publish/decompiled-check.cs | head -60
+          test -s publish/EmpressValuablesUncapped.dll
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmpressValuablesUncapped-REPO-0.5.1
+          path: publish/EmpressValuablesUncapped.dll
+          retention-days: 7
